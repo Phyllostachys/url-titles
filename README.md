@@ -1,2 +1,2 @@
-# url_titles
-Small utility to get page titles from list of urls.
+# url-titles
+Small utility to get page title tags from a list of urls.
