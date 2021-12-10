@@ -1,0 +1,11 @@
+[package]
+name = "url_titles"
+version = "1.0.0"
+authors = ["Jacob Shaffer <jpshaffer5481@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+structopt = "0.3"
+rayon = "1.5.1"
+reqwest = { version = "0.11", default-features = false, features = ["native-tls", "blocking"] }
+select = "0.5"
