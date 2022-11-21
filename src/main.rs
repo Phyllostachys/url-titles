@@ -35,9 +35,8 @@ impl UrlTitle {
                 Ok(v) => v,
                 Err(_) => return,
             };
-            self.title
-                .push_str(format!("({})", video.date().to_string()).as_str());
-            self.title.push_str(" ");
+            self.title.push_str(format!("({})", video.date()).as_str());
+            self.title.push(' ');
             self.title.push_str(video.title());
         }
     }
@@ -63,12 +62,20 @@ fn main() {
     let buf = std::io::BufReader::new(file);
     let mut urls: Vec<String> = buf
         .lines()
-        .filter_map(|line| line.ok())
-        .map(|url| String::from(url))
+        .filter_map(|line| match line {
+            Ok(s) => {
+                if s.is_empty() {
+                    None
+                } else {
+                    Some(s)
+                }
+            }
+            Err(_) => None,
+        })
         .collect();
 
-    for group in urls.chunks_exact_mut(opt.chunk_size) {
-        let result: Vec<UrlTitle> = group
+    for url_group in urls.chunks_mut(opt.chunk_size) {
+        let result: Vec<UrlTitle> = url_group
             .par_iter()
             .map(|url| {
                 if url.contains("youtube") {
