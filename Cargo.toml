@@ -1,6 +1,6 @@
 [package]
 name = "url_titles"
-version = "1.0.0"
+version = "1.0.2"
 authors = ["Jacob Shaffer <jpshaffer5481@gmail.com>"]
 edition = "2021"
 
