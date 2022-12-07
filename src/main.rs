@@ -9,37 +9,32 @@ use structopt::StructOpt;
 use tokio::runtime::Runtime;
 use ytextract::video;
 
-#[derive(Clone)]
-struct UrlTitle {
-    url: String,
-    title: String,
-}
+fn process_yt(url: &String, client: &ytextract::Client) -> String {
+    let mut result = String::new();
 
-impl UrlTitle {
-    pub fn new(url: &String) -> UrlTitle {
-        UrlTitle {
-            url: String::from(url),
-            title: String::new(),
-        }
+    // if it's a URL to a video...
+    if let Some(index) = url.find("v=") {
+        let (_, video_id) = url.split_at(index + 2);
+        let video_id: video::Id = match video_id.parse() {
+            Ok(i) => i,
+            Err(_) => return String::new(),
+        };
+        let rt = Runtime::new().unwrap();
+        let video = match rt.block_on(client.video(video_id)) {
+            Ok(v) => v,
+            Err(_) => return String::new(),
+        };
+
+        result.push_str(video.channel().name());
+        result.push(' ');
+        result.push_str(format!("({})", video.date()).as_str());
+        result.push(' ');
+        result.push_str(url);
+        result.push_str(" -- ");
+        result.push_str(video.title());
     }
 
-    pub fn process_yt(&mut self, client: &ytextract::Client) {
-        if let Some(index) = self.url.find("v=") {
-            let (_, video_id) = self.url.split_at(index + 2);
-            let video_id: video::Id = match video_id.parse() {
-                Ok(i) => i,
-                Err(_) => return,
-            };
-            let rt = Runtime::new().unwrap();
-            let video = match rt.block_on(client.video(video_id)) {
-                Ok(v) => v,
-                Err(_) => return,
-            };
-            self.title.push_str(format!("({})", video.date()).as_str());
-            self.title.push(' ');
-            self.title.push_str(video.title());
-        }
-    }
+    result
 }
 
 #[derive(StructOpt, Debug)]
@@ -74,34 +69,31 @@ fn main() {
         })
         .collect();
 
-    for url_group in urls.chunks_mut(opt.chunk_size) {
-        let result: Vec<UrlTitle> = url_group
+    urls.chunks_mut(opt.chunk_size).for_each(|url_group| {
+        let result: Vec<String> = url_group
             .par_iter()
             .map(|url| {
                 if url.contains("youtube") {
-                    let mut ut = UrlTitle::new(url);
-                    ut.process_yt(&client);
-                    ut
+                    process_yt(url, &client)
                 } else {
                     let res = reqwest::blocking::get(url).unwrap();
                     let content = res.text().unwrap();
                     let document = Document::from(content.as_str());
-                    UrlTitle {
-                        url: String::from(url),
-                        title: if let Some(node) = document.find(Name("title")).next() {
-                            node.text()
-                        } else {
-                            String::new()
-                        },
+
+                    let mut result = String::new();
+                    result.push_str(url);
+                    result.push_str(" --- ");
+                    if let Some(node) = document.find(Name("title")).next() {
+                        result.push_str(node.text().as_str());
+                    } else {
+                        result.push_str("Title not found");
                     }
+                    result
                 }
             })
             .collect();
 
-        for url in result {
-            println!("{} --- {}", url.url, url.title);
-        }
-
+        result.iter().for_each(|url| println!("{}", url));
         thread::sleep(Duration::from_secs_f32(opt.delay_time));
-    }
+    });
 }
