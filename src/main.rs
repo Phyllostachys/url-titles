@@ -7,33 +7,26 @@ use rayon::prelude::*;
 use select::{document::Document, predicate::Name};
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
-use ytextract::video;
+use youtube_dl::YoutubeDl;
 
-fn process_yt(url: &String, client: &ytextract::Client) -> String {
+fn process_yt(url: &String) -> String {
     let mut result = String::new();
 
-    // if it's a URL to a video...
-    if let Some(index) = url.find("v=") {
-        let (_, video_id) = url.split_at(index + 2);
-        let video_id: video::Id = match video_id.parse() {
-            Ok(i) => i,
-            Err(_) => return String::new(),
-        };
-        let rt = Runtime::new().unwrap();
-        let video = match rt.block_on(client.video(video_id)) {
-            Ok(v) => v,
-            Err(_) => return String::new(),
-        };
+    let video = YoutubeDl::new(url)
+        .socket_timeout("15")
+        .download(false)
+        .run()
+        .unwrap()
+        .into_single_video()
+        .unwrap();
 
-        result.push_str(video.channel().name());
-        result.push(' ');
-        result.push_str(format!("({})", video.date()).as_str());
-        result.push(' ');
-        result.push_str(url);
-        result.push_str(" -- ");
-        result.push_str(video.title());
-    }
-
+    result.push_str(video.channel.unwrap().as_str());
+    result.push(' ');
+    result.push_str(video.upload_date.unwrap().as_str());
+    result.push(' ');
+    result.push_str(url);
+    result.push_str(" -- ");
+    result.push_str(video.title.as_str());
     result
 }
 
@@ -53,7 +46,6 @@ struct Options {
 fn main() {
     let opt = Options::from_args();
     let file = std::fs::File::open(opt.input).unwrap();
-    let client = ytextract::Client::new();
     let buf = std::io::BufReader::new(file);
     let mut urls: Vec<String> = buf
         .lines()
@@ -74,7 +66,7 @@ fn main() {
             .par_iter()
             .map(|url| {
                 if url.contains("youtube") {
-                    process_yt(url, &client)
+                    process_yt(url)
                 } else {
                     let res = reqwest::blocking::get(url).unwrap();
                     let content = res.text().unwrap();
