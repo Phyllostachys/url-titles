@@ -6,19 +6,23 @@ use std::time::Duration;
 use rayon::prelude::*;
 use select::{document::Document, predicate::Name};
 use structopt::StructOpt;
-use tokio::runtime::Runtime;
-use youtube_dl::YoutubeDl;
+use youtube_dl::{Error, YoutubeDl, YoutubeDlOutput};
 
 fn process_yt(url: &String) -> String {
     let mut result = String::new();
 
-    let video = YoutubeDl::new(url)
+    let ytdlp_out = match YoutubeDl::new(url)
         .socket_timeout("15")
         .download(false)
         .run()
-        .unwrap()
-        .into_single_video()
-        .unwrap();
+    {
+        Ok(o) => o,
+        Err(e) => {
+            println!("Failed to get result from yt-dlp - {e}");
+            return String::from(url);
+        }
+    };
+    let video = ytdlp_out.into_single_video().unwrap();
 
     result.push_str(video.channel.unwrap().as_str());
     result.push(' ');
