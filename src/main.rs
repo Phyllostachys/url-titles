@@ -6,20 +6,23 @@ use std::time::Duration;
 use rayon::prelude::*;
 use select::{document::Document, predicate::Name};
 use structopt::StructOpt;
-use youtube_dl::{Error, YoutubeDl, YoutubeDlOutput};
+use youtube_dl::YoutubeDl;
 
-fn process_yt(url: &String) -> String {
+enum ProcessError {
+    FailedToProcessWithYtDlp,
+}
+
+fn process_yt(url: &String) -> Result<String, ProcessError> {
     let mut result = String::new();
 
     let ytdlp_out = match YoutubeDl::new(url)
         .socket_timeout("15")
-        .download(false)
         .run()
     {
         Ok(o) => o,
         Err(e) => {
             println!("Failed to get result from yt-dlp - {e}");
-            return String::from(url);
+            return Err(ProcessError::FailedToProcessWithYtDlp);
         }
     };
     let video = ytdlp_out.into_single_video().unwrap();
@@ -30,7 +33,23 @@ fn process_yt(url: &String) -> String {
     result.push(' ');
     result.push_str(url);
     result.push_str(" -- ");
-    result.push_str(video.title.as_str());
+    result.push_str(video.title.unwrap().as_str());
+    Ok(result)
+}
+
+fn process_normal(url: &String) -> String {
+    let res = reqwest::blocking::get(url).unwrap();
+    let content = res.text().unwrap();
+    let document = Document::from(content.as_str());
+
+    let mut result = String::new();
+    result.push_str(url);
+    result.push_str(" --- ");
+    if let Some(node) = document.find(Name("title")).next() {
+        result.push_str(node.text().as_str());
+    } else {
+        result.push_str("Title not found");
+    }
     result
 }
 
@@ -70,21 +89,13 @@ fn main() {
             .par_iter()
             .map(|url| {
                 if url.contains("youtube") {
-                    process_yt(url)
-                } else {
-                    let res = reqwest::blocking::get(url).unwrap();
-                    let content = res.text().unwrap();
-                    let document = Document::from(content.as_str());
-
-                    let mut result = String::new();
-                    result.push_str(url);
-                    result.push_str(" --- ");
-                    if let Some(node) = document.find(Name("title")).next() {
-                        result.push_str(node.text().as_str());
+                    if let Ok(r) = process_yt(url) {
+                        r
                     } else {
-                        result.push_str("Title not found");
+                        process_normal(url)
                     }
-                    result
+                } else {
+                    process_normal(url)
                 }
             })
             .collect();
