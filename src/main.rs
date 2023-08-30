@@ -15,10 +15,7 @@ enum ProcessError {
 fn process_yt(url: &String) -> Result<String, ProcessError> {
     let mut result = String::new();
 
-    let ytdlp_out = match YoutubeDl::new(url)
-        .socket_timeout("15")
-        .run()
-    {
+    let ytdlp_out = match YoutubeDl::new(url).socket_timeout("15").run() {
         Ok(o) => o,
         Err(e) => {
             println!("Failed to get result from yt-dlp - {e}");
@@ -30,6 +27,8 @@ fn process_yt(url: &String) -> Result<String, ProcessError> {
     result.push_str(video.channel.unwrap().as_str());
     result.push(' ');
     result.push_str(video.upload_date.unwrap().as_str());
+    result.push(' ');
+    result.push_str(video.duration_string.unwrap().as_str());
     result.push(' ');
     result.push_str(url);
     result.push_str(" -- ");
